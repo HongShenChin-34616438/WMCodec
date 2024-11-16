@@ -17,7 +17,7 @@ Modify the parameter `--input_wavs_dir` `--output_dir` `--checkpoint_file` in `i
 Modify the config.json
 
 ### Watermark config
-The watermark configuration is in the `watermark.py` file, defaulting to 4-digit base-16.
+The watermark configuration is in the `watermark.py`, defaulting to 4-digit base-16.
 
 ### Train
 ```
