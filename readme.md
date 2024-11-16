@@ -3,4 +3,4 @@ PyTorch Implementation of [WMCodec: End-to-End Neural Speech Codec with Deep Wat
 
 ## Quick Started
 ### Dependencies
-  pip install -r requirement.txt
+  `pip install -r requirement.txt`
