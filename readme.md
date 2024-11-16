@@ -3,7 +3,9 @@ PyTorch Implementation of [WMCodec: End-to-End Neural Speech Codec with Deep Wat
 
 ## Quick Started
 ### Dependencies
-  `pip install -r requirement.txt`
+```
+pip install -r requirement.txt
+```
 
 ### Default Preparation
 Modify the parameter `--input_training_file` `--input_validation_file` `--checkpoint_path` in `train.py`
@@ -16,10 +18,14 @@ Modify the config.json
 The watermark configuration is in the `watermark.py` file, defaulting to 4-digit base-16.
 
 ### Train
- `python train.py `
+```
+python train.py
+```
 
 ### Test
- `python inference-at.py `
+```
+python inference-at.py
+```
 
 ### Acknowledgements
 This implementation uses parts of the code from the following Github repos: [TraceableSpeech](https://github.com/zjzser/TraceableSpeech)
