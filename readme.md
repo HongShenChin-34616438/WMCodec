@@ -8,6 +8,8 @@ pip install -r requirement.txt
 ```
 
 ### Default Preparation
+We are using the [LibriTTS](https://openslr.org/60/) dataset.
+
 Modify the parameter `--input_training_file` `--input_validation_file` `--checkpoint_path` in `train.py`
 
 Modify the parameter `--input_wavs_dir` `--output_dir` `--checkpoint_file` in `inference-at.py`
