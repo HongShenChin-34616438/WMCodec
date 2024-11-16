@@ -22,7 +22,7 @@ The watermark configuration is in the `watermark.py` file, defaulting to 4-digit
  `python inference-at.py `
 
 ### Acknowledgements
-This implementation uses parts of the code from the following Github repos: [https://github.com/zjzser/TraceableSpeech](https://github.com/zjzser/TraceableSpeech)
+This implementation uses parts of the code from the following Github repos: [TraceableSpeech](https://github.com/zjzser/TraceableSpeech)
 
 ### Citations
 If you find this code useful in your research, please consider citing:
