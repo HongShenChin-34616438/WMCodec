@@ -1,6 +1,18 @@
 # WMCodec
 PyTorch Implementation of [WMCodec: End-to-End Neural Speech Codec with Deep Watermarking for Authenticity Verification](https://arxiv.org/abs/2409.12121)
 
+## 🚀 Model Weights Release (2025.08.01)
+Pretrained weights are now available on Hugging Face Hub with **12kbps bitrate** and **4-digit base-16 watermark** configuration:
+
+- **Model Hub**: [zjzser/WMCodec](https://huggingface.co/zjzser/WMCodec)  
+- **Files**:
+```
+- ./save_model/
+├── config.json # Configuration file
+├── g_00150000 # Generator weights (inference)
+└── do_00150000 # Discriminator weights
+```
+
 ## Quick Started
 ### Dependencies
 ```
@@ -23,6 +35,7 @@ The watermark configuration is in the `watermark.py`, defaulting to 4-digit base
 ```
 python train.py
 ```
+All checkpoint file for finetune is prepared in Your_Path/save_model/
 
 ### Test
 ```
