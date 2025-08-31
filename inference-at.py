@@ -130,6 +130,7 @@ def inference(a):
 
     short_time_raw_discard = []
     short_time_clip_discard = []
+    viz_count = 0
 
     print("device : ", device)
     with torch.no_grad():
