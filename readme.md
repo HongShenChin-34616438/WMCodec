@@ -16,7 +16,7 @@ Pretrained weights are now available on Hugging Face Hub with **12kbps bitrate**
 ## Quick Started
 ### Dependencies
 ```
-pip install -r requirement.txt
+pip install -r requirements.txt
 ```
 
 ### Default Preparation
