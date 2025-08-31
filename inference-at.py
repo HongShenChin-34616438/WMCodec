@@ -160,21 +160,34 @@ def inference(a):
         print("No CLIP")
         print("total stastic:")
         print("audiomark_loss:")
-        for Opera in [ "CLP", "RSP-90", "Noise-W35", "SS-01", "AS-90", "EA-0301", "LP5000"]: 
-            print("Opera", Opera, "iter", N_result_dic[f"{Opera}"][0] ,"value", N_result_dic[f"{Opera}"][2] / N_result_dic[f"{Opera}"][0] )
+        for Opera in [ "CLP", "RSP-90", "Noise-W35", "SS-01", "AS-90", "EA-0301", "LP5000"]:
+            if N_result_dic[f"{Opera}"][0] > 0:
+              print("Opera", Opera, "iter", N_result_dic[f"{Opera}"][0] ,"value", N_result_dic[f"{Opera}"][2] / N_result_dic[f"{Opera}"][0] )
+            else:
+              print("Opera", Opera, "iter", N_result_dic[f"{Opera}"][0], "value", "N/A (no samples)")
         print("ACC:")
-        for Opera in [ "CLP", "RSP-90", "Noise-W35", "SS-01", "AS-90", "EA-0301", "LP5000"]: 
-            print("Opera", Opera, "iter", N_result_dic[f"{Opera}"][0] ,"value", N_result_dic[f"{Opera}"][1] / (N_result_dic[f"{Opera}"][0] * bit_num) )
+        for Opera in [ "CLP", "RSP-90", "Noise-W35", "SS-01", "AS-90", "EA-0301", "LP5000"]:
+            if N_result_dic[f"{Opera}"][0] > 0:
+              print("Opera", Opera, "iter", N_result_dic[f"{Opera}"][0] ,"value", N_result_dic[f"{Opera}"][1] / (N_result_dic[f"{Opera}"][0] * bit_num) )
+            else:
+              print("Opera", Opera, "iter", N_result_dic[f"{Opera}"][0] ,"value", "N/A (no samples)")
+
 
         print("===============================")
         print("Yes CLIP")
         print("total stastic:")
         print("audiomark_loss:")
-        for Opera in [ "CLP", "RSP-90", "Noise-W35", "SS-01", "AS-90", "EA-0301", "LP5000"]: 
-            print("Opera", Opera, "iter", Y_result_dic[f"{Opera}"][0] ,"value", Y_result_dic[f"{Opera}"][2] / Y_result_dic[f"{Opera}"][0] )
+        for Opera in [ "CLP", "RSP-90", "Noise-W35", "SS-01", "AS-90", "EA-0301", "LP5000"]:
+            if Y_result_dic[f"{Opera}"][0] > 0:
+              print("Opera", Opera, "iter", Y_result_dic[f"{Opera}"][0] ,"value", Y_result_dic[f"{Opera}"][2] / Y_result_dic[f"{Opera}"][0] )
+            else:
+              print("Opera", Opera, "iter", Y_result_dic[f"{Opera}"][0], "value", "N/A (no samples)")
         print("ACC:")
-        for Opera in [ "CLP", "RSP-90", "Noise-W35", "SS-01", "AS-90", "EA-0301", "LP5000"]: 
-            print("Opera", Opera, "iter", Y_result_dic[f"{Opera}"][0] ,"value", Y_result_dic[f"{Opera}"][1] / (Y_result_dic[f"{Opera}"][0] * bit_num) )
+        for Opera in [ "CLP", "RSP-90", "Noise-W35", "SS-01", "AS-90", "EA-0301", "LP5000"]:
+            if Y_result_dic[f"{Opera}"][0] > 0:
+              print("Opera", Opera, "iter", Y_result_dic[f"{Opera}"][0] ,"value", Y_result_dic[f"{Opera}"][1] / (Y_result_dic[f"{Opera}"][0] * bit_num) )
+            else:
+              print("Opera", Opera, "iter", Y_result_dic[f"{Opera}"][0] ,"value", "N/A (no samples)" )
 
 
 def main():
