@@ -7,6 +7,8 @@ import time
 from time import perf_counter
 import pdb
 import torch
+import matplotlib.pyplot as plt
+import numpy as np
 from scipy.io.wavfile import write
 from env import AttrDict
 from meldataset import mel_spectrogram, MAX_WAV_VALUE, load_wav
@@ -43,6 +45,43 @@ def count_common_elements(tensorA, tensorB):
             cnt += 1
     return cnt
 
+def waveform_visualisation(clean, attacked, sr, out_img):
+   clean_np = clean.squeeze().detach().cpu().numpy()
+   attacked_np = attacked.squeeze().detach().cpu().numpy()
+
+   plt.figure(figsize=(12, 8))
+   plt.subplot(2, 1, 1)
+   plt.title("Clean Waveform")
+   plt.plot(clean_np)
+   plt.subplot(2, 1, 2)
+   plt.title("Attacked Waveform")
+   plt.plot(attacked_np)
+   plt.tight_layout()
+   plt.savefig(out_img)
+   plt.close()
+
+def mel_preprocessing(mel):
+   if mel.dim() == 3:
+      mel = mel[0]
+   mel = mel.detach().cpu().numpy()
+   return mel
+
+def mel_spectrogram_visualisation(mel_clean, mel_attacked, out_img):
+   mel_cl = mel_preprocessing(mel_clean)
+   mel_at = mel_preprocessing(mel_attacked)
+
+   plt.figure(figsize=(12, 8))
+   plt.subplot(2, 1, 1)
+   plt.title("Clean Mel Spectrogram")
+   plt.imshow(mel_cl, aspect='auto', origin='lower')
+   plt.colorbar()
+   plt.subplot(2, 1, 2)
+   plt.title("Attacked Mel Spectrogram")
+   plt.imshow(mel_at, aspect='auto', origin='lower')
+   plt.colorbar()
+   plt.tight_layout()
+   plt.savefig(out_img)
+   plt.close()
 
 def inference(a):
     generator = Generator(h).to(device)
@@ -118,6 +157,9 @@ def inference(a):
                 # q = quantizer_Audio.embed(q, h.Audio['infer_need_layer'])
             
                 y_g_hat = generator(q)
+                
+                # keep a copy before attack
+                y_g_hat_clean = y_g_hat.clone()
 
                 if j == 0: 
                     audio = y_g_hat.squeeze()
@@ -129,6 +171,14 @@ def inference(a):
                 y_g_hat, clip_flag = clip(y_g_hat)
                 y_g_hat, Opera = attack(y_g_hat, [("CLP", 0.13), ("RSP-90", 0.15), ("Noise-W35", 0.14), ("SS-01", 0.15), ("AS-90", 0.15), ("EA-0301", 0.14), ("LP5000", 0.14)]) # 施加攻击
                 # complete attack
+
+                if a.visualize and viz_count < 20:
+                   viz_count += 1
+                   waveform_out = os.path.join(a.output_dir, os.path.splitext(filename)[0] + f'_id{i}_sign{j}_{Opera}_{clip_flag}_waveform.png')
+                   waveform_visualisation(y_g_hat_clean, y_g_hat, h.sampling_rate, waveform_out)
+
+                   mel_clean = mel_spectrogram(y_g_hat_clean.squeeze(1), h.n_fft, h.num_mels, h.sampling_rate, h.hop_size, h.win_size, h.fmin, h.fmax_for_loss)
+
                 
                 if y_g_hat.shape[2] <= 1.125 * sr: 
                     print("id : ", i , "edit_id : ", j, "filename : ", filename, "clip_flag", clip_flag , "now length is ", y_g_hat.shape[2])
@@ -137,6 +187,11 @@ def inference(a):
                 
                 y_g_hat_mel = mel_spectrogram(y_g_hat.squeeze(1), h.n_fft, h.num_mels, h.sampling_rate, h.hop_size, h.win_size,
                                             h.fmin, h.fmax_for_loss) # 1024, 80, 24000, 240,1024 # [32, 80, 50]
+                
+                if a.visualize and viz_count < 20:
+                   mel_out = os.path.join(a.output_dir, os.path.splitext(filename)[0] + f'_id{i}_sign{j}_{Opera}_{clip_flag}_mel.png')
+                   mel_spectrogram_visualisation(mel_clean, y_g_hat_mel, mel_out)
+
                 sign_score, sign_g_hat = watermark_decoder(y_g_hat_mel)
                 audiomark_loss = sign_loss(sign_score, sign)
 
@@ -196,7 +251,8 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--input_wavs_dir', default='')
     parser.add_argument('--output_dir', default='')
-    parser.add_argument('--checkpoint_file', default='') 
+    parser.add_argument('--checkpoint_file', default='')
+    parser.add_argument('--visualize', action='store_true', help='Visualize the waveforms before and after the attack')
     a = parser.parse_args()
 
     config_file = os.path.join(os.path.split(a.checkpoint_file)[0], 'config.json')
