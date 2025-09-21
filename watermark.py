@@ -77,127 +77,240 @@ def sign_loss(sign_score, sign): # [32, 10], [32, 4]
     
     return loss
 
+def select_attack(order_list):
+    """
+    order_list: list of (attack_type, selection weight, attack_strength)
+    returns: (opera, attack_strength)
+    """
+    Opera = [x[0] for x in order_list] # attack type
+    weights = np.array([float(x[1]) for x in order_list], dtype=float)
+    if weights.sum() <= 0:
+        # fallback: uniform
+        probs = np.ones_like(weights) / len(weights)
+    else:
+        probs = weights / weights.sum() # normalize to probabilities
+    idx = np.random.choice(len(Opera), p=probs)
+    return order_list[idx][0], order_list[idx][2]
 
-def attack(y_g_hat, order_list = None): 
-    # attack is used for whole batch
-    # order_list is set of operation [CLP, RSP-16 , Noise-W20,  Noise-P20, APS-05, APS-15 , HPF-18 , LPF-10]
-    # order is tuple，[(CLP, 0.4), (RSP-16, 0.3), (Noise-W20, 0.3)]
-    '''
-    close loop: 完全无影响(CLP)
-    re sampling: Uniformly resampled to 16kHz (RSP-16)
-    lossy compression: MP3 64 kbps (MP3-64)
-    random noise: Noise type is uniformly sampled from White, and Pink Noise 20dB (Noise-W20) (Noise-P20)
-    Gain: Gain multiplies a random amplitude to reduce or increase the volume, 0.5 amplitude scaling(APS-05) 1.5 amplitude scaling(APS-15)
-    Pass filter: (HPF-18)、(LPF-10)
-    '''
+def attack(y_g_hat, order_list = None):
+    if order_list is None or len(order_list) == 0:
+        return y_g_hat, "CLP"
+    Opera, attack_strength = select_attack(order_list)
+    
+    return apply_selected_attack(y_g_hat, Opera, attack_strength)
 
-    random_number = random.random()
-    raw_random_number = random_number
-    #print("raw_random_number: ", raw_random_number)
-    for order in order_list:
-        random_number = random_number - order[1]
-        if random_number < 0:
-            Opera = order[0]
-            break
-    #print("raw_random_number: ", raw_random_number, "  Opera:", Opera)
+def apply_selected_attack(y_g_hat, Opera, attack_strength):
+    # Opera names: "CLP", "RSP", "NoiseW", "SS", "AS", "TS", "EA", "LP", "MF"
 
+    sampling_rate = 24000
+
+    # Closed Loop: No operation, serve as a control
     if Opera == "CLP":
         y_g_hat_att = y_g_hat
         return y_g_hat_att, Opera
-    
-    if Opera == "RSP-90":
-        resample1 = torchaudio.transforms.Resample(24000, 21600).to(y_g_hat.device)
-        resample2 = torchaudio.transforms.Resample(21600, 24000).to(y_g_hat.device)
-        y_g_hat_att = resample1(y_g_hat)
-        y_g_hat_att = resample2(y_g_hat_att)
-        return y_g_hat_att, Opera
-    
-    if Opera == "Noise-W35": 
-        def generate_white_noise(X, N, snr):
-            noise = torch.randn(N)
-            noise = noise.to(X.device)
-            snr = 10 ** (snr/10)
+
+    if Opera in ("RSP", "RSP-90"):
+        factor = 0.9 if attack_strength is None else float(attack_strength)
+        new_sr = int(sampling_rate * factor)  # use sampling_rate existing config
+        resample1 = torchaudio.transforms.Resample(sampling_rate, new_sr).to(y_g_hat.device)
+        resample2 = torchaudio.transforms.Resample(new_sr, sampling_rate).to(y_g_hat.device)
+        y_out = resample1(y_g_hat)
+        y_out = resample2(y_out)
+        return y_out, "RSP"
+
+    if Opera in ("NoiseW", "Noise-W", "Noise-W35"):
+        snr_db = 35.0 if attack_strength is None else float(attack_strength)
+
+        def generate_white_noise(X, N, snr_db):
+            noise = torch.randn(N).to(X.device)
+            snr_lin = 10 ** (snr_db/10)
             power = torch.mean(torch.square(X))
-            npower = power / snr
+            npower = power / snr_lin
             noise = noise * torch.sqrt(npower)
             X = X + noise
             return X, noise
-
-        y_g_hat_att, noise = generate_white_noise(y_g_hat, y_g_hat.shape[2], 35)
-        return y_g_hat_att, Opera
-    
-    if Opera == "SS-01": 
-        def generate_random_tensor(N, rate):
-            num_zeros = int(N * rate)  
-            num_ones = N - num_zeros
-            tensor_data = np.concatenate((np.zeros(num_zeros), np.ones(num_ones)))
-            np.random.shuffle(tensor_data)
-            mask = torch.tensor(tensor_data).float()
-            return mask
         
-        mask = generate_random_tensor(y_g_hat.shape[2], 0.001)
-        mask = mask.to(y_g_hat.device)
-        y_g_hat_att = y_g_hat * mask
-        
-        return y_g_hat_att, Opera
-    
-    if Opera == "AS-90": 
-        def generate_rate_tensor(N, rate):
-           tensor = torch.full((N,), rate)
-           return tensor
-        
-        rate_para = generate_rate_tensor(y_g_hat.shape[2], 0.9)
-        rate_para = rate_para.to(y_g_hat.device)
-        y_g_hat_att = y_g_hat * rate_para
+        y_out, noise = generate_white_noise(y_g_hat, y_g_hat.shape[2], snr_db)
+        return y_out, "NoiseW"
 
+    if Opera in ("SS", "SS-01"):
+        rate = 0.001 if attack_strength is None else float(attack_strength)
+        N = y_g_hat.shape[2]
+        num_zeros = int(N * rate)
+        num_ones = N - num_zeros
+        tensor_data = np.concatenate((np.zeros(num_zeros), np.ones(num_ones)))
+        np.random.shuffle(tensor_data)
+        mask = torch.tensor(tensor_data, device=y_g_hat.device).float().unsqueeze(0).unsqueeze(0)
+        y_out = y_g_hat * mask
+        return y_out, "SS"
 
-        return y_g_hat_att, Opera
-        
-    if Opera == "TS-09": 
-        speed_factor = 0.95
-        resampler = torchaudio.transforms.Resample(
-            orig_freq=24000,  
-            new_freq=int(24000* speed_factor) 
-        )
-        
-        y_g_hat_att = resampler(y_g_hat)
-        
+    if Opera in ("AS", "AS-90"):
+        factor = 0.9 if attack_strength is None else float(attack_strength)
+        rate_para = torch.full((y_g_hat.shape[2],), factor, device=y_g_hat.device)
+        y_out = y_g_hat * rate_para
+        return y_out, "AS"
 
+    if Opera in ("TS", "TS-09"):
+        speed_factor = 0.95 if attack_strength is None else float(attack_strength)
+        resampler = torchaudio.transforms.Resample(orig_freq=sampling_rate, new_freq=int(sampling_rate * speed_factor)).to(y_g_hat.device)
+        y_out = resampler(y_g_hat)
+        return y_out, "TS"
 
-        return y_g_hat_att, Opera
-    
-    if Opera == "EA-0301": 
-        def generate_rate_tensor(N, rate):
-           tensor = torch.full((N,), rate)
-           return tensor
-        
-        rate_para = generate_rate_tensor(y_g_hat.shape[2], 0.3)
-        rate_para = rate_para.to(y_g_hat.device)
-        y_g_hat_echo = y_g_hat * rate_para
-        shift_amount = int(y_g_hat.size(2) * 0.15)  
-        y_g_hat_truncated =y_g_hat.clone()[:, :, :shift_amount]
-        y_g_hat_truncated[:,:,:shift_amount] = 0
-        padded_tensor = torch.cat((y_g_hat_truncated, y_g_hat_echo),dim = 2)
-        y_g_hat_att = padded_tensor[:, :, :y_g_hat.size(2)] +  y_g_hat
+    if Opera in ("EA","EA-0301"):
+        # attack_strength can be (atten, shift_frac)
+        if attack_strength is None:
+            atten, shift_frac = 0.3, 0.15
+        elif isinstance(attack_strength, (tuple, list)) and len(attack_strength) == 2:
+            atten, shift_frac = float(attack_strength[0]), float(attack_strength[1])
+        else:
+            atten, shift_frac = float(attack_strength), 0.15
 
-        return y_g_hat_att, Opera 
-    
-    if Opera == "LP5000": 
-        y_g_hat_att = torchaudio.functional.lowpass_biquad(y_g_hat, 24000, cutoff_freq = 5000, Q = 0.707)
+        N = y_g_hat.size(2)
+        shift_amount = int(N * shift_frac)
+        echo = (y_g_hat * atten)
+        padded = torch.cat([torch.zeros_like(y_g_hat[:, :, :shift_amount]), echo], dim=2)
+        y_out = (padded[:, :, :N] + y_g_hat).to(y_g_hat.device)
+        return y_out, "EA"
 
-        return y_g_hat_att, Opera 
-    
-    if Opera == "MF-3":
-        window_size = 3
-        filtered_signal = torch.zeros_like(y_g_hat)
+    if Opera in ("LP","LP5000"):
+        cutoff = 5000 if attack_strength is None else float(attack_strength)
+        y_out = torchaudio.functional.lowpass_biquad(y_g_hat, sampling_rate, cutoff_freq=cutoff, Q=0.707)
+        return y_out, "LP"
+
+    if Opera in ("MF","MF-3"):
+        window_size = 3 if attack_strength is None else int(attack_strength)
+        filtered = torch.zeros_like(y_g_hat)
         for i in range(y_g_hat.size(2)):
             start = max(0, i - window_size // 2)
             end = min(y_g_hat.size(2), i + window_size // 2 + 1)
-            window = y_g_hat[:,:,start:end]
-            filtered_signal[:,:,start:end] = torch.median(window)
+            window = y_g_hat[:, :, start:end]
+            filtered[:, :, start:end] = torch.median(window, dim=2, keepdim=True)[0]
+        return filtered, "MF"
+
+    # fallback: no-op
+    return y_g_hat, "CLP"
+
+
+# def attack(y_g_hat, order_list = None): 
+#     # attack is used for whole batch
+#     # order_list is set of operation [CLP, RSP-16 , Noise-W20,  Noise-P20, APS-05, APS-15 , HPF-18 , LPF-10]
+#     # order is tuple，[(CLP, 0.4), (RSP-16, 0.3), (Noise-W20, 0.3)]
+#     '''
+#     close loop: 完全无影响(CLP)
+#     re sampling: Uniformly resampled to 16kHz (RSP-16)
+#     lossy compression: MP3 64 kbps (MP3-64)
+#     random noise: Noise type is uniformly sampled from White, and Pink Noise 20dB (Noise-W20) (Noise-P20)
+#     Gain: Gain multiplies a random amplitude to reduce or increase the volume, 0.5 amplitude scaling(APS-05) 1.5 amplitude scaling(APS-15)
+#     Pass filter: (HPF-18)、(LPF-10)
+#     '''
+
+#     random_number = random.random()
+#     raw_random_number = random_number
+#     #print("raw_random_number: ", raw_random_number)
+#     for order in order_list:
+#         random_number = random_number - order[1]
+#         if random_number < 0:
+#             Opera = order[0]
+#             break
+#     #print("raw_random_number: ", raw_random_number, "  Opera:", Opera)
+
+#     if Opera == "CLP":
+#         y_g_hat_att = y_g_hat
+#         return y_g_hat_att, Opera
+    
+#     if Opera == "RSP-90":
+#         resample1 = torchaudio.transforms.Resample(24000, 21600).to(y_g_hat.device)
+#         resample2 = torchaudio.transforms.Resample(21600, 24000).to(y_g_hat.device)
+#         y_g_hat_att = resample1(y_g_hat)
+#         y_g_hat_att = resample2(y_g_hat_att)
+#         return y_g_hat_att, Opera
+    
+#     if Opera == "Noise-W35": 
+#         def generate_white_noise(X, N, snr):
+#             noise = torch.randn(N)
+#             noise = noise.to(X.device)
+#             snr = 10 ** (snr/10)
+#             power = torch.mean(torch.square(X))
+#             npower = power / snr
+#             noise = noise * torch.sqrt(npower)
+#             X = X + noise
+#             return X, noise
+
+#         y_g_hat_att, noise = generate_white_noise(y_g_hat, y_g_hat.shape[2], 35)
+#         return y_g_hat_att, Opera
+    
+#     if Opera == "SS-01": 
+#         def generate_random_tensor(N, rate):
+#             num_zeros = int(N * rate)  
+#             num_ones = N - num_zeros
+#             tensor_data = np.concatenate((np.zeros(num_zeros), np.ones(num_ones)))
+#             np.random.shuffle(tensor_data)
+#             mask = torch.tensor(tensor_data).float()
+#             return mask
         
-        y_g_hat_att = filtered_signal
-        return y_g_hat_att, Opera
+#         mask = generate_random_tensor(y_g_hat.shape[2], 0.001)
+#         mask = mask.to(y_g_hat.device)
+#         y_g_hat_att = y_g_hat * mask
+        
+#         return y_g_hat_att, Opera
+    
+#     if Opera == "AS-90": 
+#         def generate_rate_tensor(N, rate):
+#            tensor = torch.full((N,), rate)
+#            return tensor
+        
+#         rate_para = generate_rate_tensor(y_g_hat.shape[2], 0.9)
+#         rate_para = rate_para.to(y_g_hat.device)
+#         y_g_hat_att = y_g_hat * rate_para
+
+
+#         return y_g_hat_att, Opera
+        
+#     if Opera == "TS-09": 
+#         speed_factor = 0.95
+#         resampler = torchaudio.transforms.Resample(
+#             orig_freq=24000,  
+#             new_freq=int(24000* speed_factor) 
+#         )
+        
+#         y_g_hat_att = resampler(y_g_hat)
+        
+
+
+#         return y_g_hat_att, Opera
+    
+#     if Opera == "EA-0301": 
+#         def generate_rate_tensor(N, rate):
+#            tensor = torch.full((N,), rate)
+#            return tensor
+        
+#         rate_para = generate_rate_tensor(y_g_hat.shape[2], 0.3)
+#         rate_para = rate_para.to(y_g_hat.device)
+#         y_g_hat_echo = y_g_hat * rate_para
+#         shift_amount = int(y_g_hat.size(2) * 0.15)  
+#         y_g_hat_truncated =y_g_hat.clone()[:, :, :shift_amount]
+#         y_g_hat_truncated[:,:,:shift_amount] = 0
+#         padded_tensor = torch.cat((y_g_hat_truncated, y_g_hat_echo),dim = 2)
+#         y_g_hat_att = padded_tensor[:, :, :y_g_hat.size(2)] +  y_g_hat
+
+#         return y_g_hat_att, Opera 
+    
+#     if Opera == "LP5000": 
+#         y_g_hat_att = torchaudio.functional.lowpass_biquad(y_g_hat, 24000, cutoff_freq = 5000, Q = 0.707)
+
+#         return y_g_hat_att, Opera 
+    
+#     if Opera == "MF-3":
+#         window_size = 3
+#         filtered_signal = torch.zeros_like(y_g_hat)
+#         for i in range(y_g_hat.size(2)):
+#             start = max(0, i - window_size // 2)
+#             end = min(y_g_hat.size(2), i + window_size // 2 + 1)
+#             window = y_g_hat[:,:,start:end]
+#             filtered_signal[:,:,start:end] = torch.median(window)
+        
+#         y_g_hat_att = filtered_signal
+#         return y_g_hat_att, Opera
 
 
 def clip(y_g_hat): # "The default slice attack only applies once."
