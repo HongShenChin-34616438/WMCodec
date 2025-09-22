@@ -89,8 +89,12 @@ def select_attack(order_list):
         probs = np.ones_like(weights) / len(weights)
     else:
         probs = weights / weights.sum() # normalize to probabilities
+    
     idx = np.random.choice(len(Opera), p=probs)
-    return order_list[idx][0], order_list[idx][2] if order_list[idx][2] is not None else None
+    chosen = order_list[idx]
+    Opera = chosen[0]
+    attack_strength = chosen[2] if len(chosen) > 2 else None
+    return Opera, attack_strength
 
 def attack(y_g_hat, order_list = None):
     if order_list is None or len(order_list) == 0:
