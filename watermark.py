@@ -90,7 +90,7 @@ def select_attack(order_list):
     else:
         probs = weights / weights.sum() # normalize to probabilities
     idx = np.random.choice(len(Opera), p=probs)
-    return order_list[idx][0], order_list[idx][2]
+    return order_list[idx][0], order_list[idx][2] if order_list[idx][2] is not None else None
 
 def attack(y_g_hat, order_list = None):
     if order_list is None or len(order_list) == 0:

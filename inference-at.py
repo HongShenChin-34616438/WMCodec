@@ -170,15 +170,7 @@ def inference(a):
                     write(output_file, h.sampling_rate, audio)
                 
                 y_g_hat, clip_flag = clip(y_g_hat)
-                y_g_hat, Opera = attack(y_g_hat, [
-                                            ("CLP", 0.13, None),                # closed loop, no attack is performed. Serve as control
-                                            ("RSP", 0.15, 0.9),                 # resample factor (0.9 = 90%), safe tune (0.5 - 1.0)
-                                            ("NoiseW", 0.30, 35.0),             # noise SNR in dB (white noise), safe tune(int) (1 - 35)
-                                            ("SS", 0.15, 0.001),                # stochastic silence rate, safe tune (0.0 - 0.1)
-                                            ("AS", 0.15, 0.9),                  # amplitude scaling factor, safe tune (0.5 - 1.5)
-                                            ("EA", 0.14, (0.3, 0.15)),          # echo: (attenuation, shift_frac), safe tune attenuation: (0.1 - 0.8), safe tune shift_frac: (0.01 - 0.3)
-                                            ("LP", 0.14, 5000),                 # lowpass cutoff Hz, safe tune (2000, 3000, 5000)
-                ]) # 施加攻击
+                y_g_hat, Opera = attack(y_g_hat, [("CLP", 0.13), ("RSP-90", 0.15), ("Noise-W35", 0.14), ("SS-01", 0.15), ("AS-90", 0.15), ("EA-0301", 0.14), ("LP5000", 0.14)]) # 施加攻击
                 # complete attack
 
                 if a.visualize and viz_count < 20:
