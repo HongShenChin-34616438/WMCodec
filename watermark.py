@@ -120,7 +120,7 @@ def apply_selected_attack(y_g_hat, Opera, attack_strength):
         resample2 = torchaudio.transforms.Resample(new_sr, sampling_rate).to(y_g_hat.device)
         y_out = resample1(y_g_hat)
         y_out = resample2(y_out)
-        return y_out, "RSP"
+        return y_out, Opera
 
     if Opera in ("NoiseW", "Noise-W", "Noise-W35"):
         snr_db = 35.0 if attack_strength is None else float(attack_strength)
@@ -135,7 +135,7 @@ def apply_selected_attack(y_g_hat, Opera, attack_strength):
             return X, noise
         
         y_out, noise = generate_white_noise(y_g_hat, y_g_hat.shape[2], snr_db)
-        return y_out, "NoiseW"
+        return y_out, Opera
 
     if Opera in ("SS", "SS-01"):
         rate = 0.001 if attack_strength is None else float(attack_strength)
@@ -146,19 +146,19 @@ def apply_selected_attack(y_g_hat, Opera, attack_strength):
         np.random.shuffle(tensor_data)
         mask = torch.tensor(tensor_data, device=y_g_hat.device).float().unsqueeze(0).unsqueeze(0)
         y_out = y_g_hat * mask
-        return y_out, "SS"
+        return y_out, Opera
 
     if Opera in ("AS", "AS-90"):
         factor = 0.9 if attack_strength is None else float(attack_strength)
         rate_para = torch.full((y_g_hat.shape[2],), factor, device=y_g_hat.device)
         y_out = y_g_hat * rate_para
-        return y_out, "AS"
+        return y_out, Opera
 
     if Opera in ("TS", "TS-09"):
         speed_factor = 0.95 if attack_strength is None else float(attack_strength)
         resampler = torchaudio.transforms.Resample(orig_freq=sampling_rate, new_freq=int(sampling_rate * speed_factor)).to(y_g_hat.device)
         y_out = resampler(y_g_hat)
-        return y_out, "TS"
+        return y_out, Opera
 
     if Opera in ("EA","EA-0301"):
         # attack_strength can be (atten, shift_frac)
@@ -174,12 +174,12 @@ def apply_selected_attack(y_g_hat, Opera, attack_strength):
         echo = (y_g_hat * atten)
         padded = torch.cat([torch.zeros_like(y_g_hat[:, :, :shift_amount]), echo], dim=2)
         y_out = (padded[:, :, :N] + y_g_hat).to(y_g_hat.device)
-        return y_out, "EA"
+        return y_out, Opera
 
     if Opera in ("LP","LP5000"):
         cutoff = 5000 if attack_strength is None else float(attack_strength)
         y_out = torchaudio.functional.lowpass_biquad(y_g_hat, sampling_rate, cutoff_freq=cutoff, Q=0.707)
-        return y_out, "LP"
+        return y_out, Opera
 
     if Opera in ("MF","MF-3"):
         window_size = 3 if attack_strength is None else int(attack_strength)
@@ -189,10 +189,10 @@ def apply_selected_attack(y_g_hat, Opera, attack_strength):
             end = min(y_g_hat.size(2), i + window_size // 2 + 1)
             window = y_g_hat[:, :, start:end]
             filtered[:, :, start:end] = torch.median(window, dim=2, keepdim=True)[0]
-        return filtered, "MF"
+        return filtered, Opera
 
     # fallback: no-op
-    return y_g_hat, "CLP"
+    return y_g_hat, Opera
 
 
 # def attack(y_g_hat, order_list = None): 
