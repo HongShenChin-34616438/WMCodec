@@ -174,7 +174,28 @@ def train(rank, a, h):
             y_g_hat = generator(q) # [32, 1, 12000]
 
             y_g_hat, Opera = attack(y_g_hat, [("CLP", 0.4), ("RSP-90", 0.10), ("Noise-W35", 0.15), ("SS-01", 0.05), ("AS-90", 0.05), ("EA-0301", 0.05), ("LP5000", 0.20)])
+            
+            # Compute mel + loss once to set up gradient for FGSM
+            y_g_hat.requires_grad_(True)
+            y_g_hat_mel = mel_spectrogram(y_g_hat.squeeze(1), h.n_fft, h.num_mels, h.sampling_rate,
+                                        h.hop_size, h.win_size, h.fmin, h.fmax_for_loss)
+            sign_score, sign_g_hat = watermark_decoder(y_g_hat_mel)
+            audiomark_loss_clean = sign_loss(sign_score, sign)
 
+            # FGSM: take grad w.r.t. y_g_hat and perturb
+            if getattr(a, 'use_fgsm', False):
+                # keep graph only for grad wrt y_g_hat
+                optim_g.zero_grad(set_to_none=True)
+                optim_d.zero_grad(set_to_none=True)
+                audiomark_loss_clean.backward(retain_graph=True)
+                with torch.no_grad():
+                    eps = getattr(a, 'fgsm_eps', 0.001)
+                    grad = y_g_hat.grad
+                    adv = y_g_hat + eps * torch.sign(grad)
+                    adv = torch.clamp(adv, -1.0, 1.0)  # keep waveform bounded
+                y_g_hat = adv.detach()  # use the adversarial waveform for the rest of the step
+                y_g_hat.requires_grad_(False)
+                
             y_g_hat_mel = mel_spectrogram(y_g_hat.squeeze(1), h.n_fft, h.num_mels, h.sampling_rate, h.hop_size, h.win_size,
                                           h.fmin, h.fmax_for_loss) # 1024, 80, 24000, 240,1024 # [32, 80, 50]
             sign_score, sign_g_hat = watermark_decoder(y_g_hat_mel)
@@ -357,6 +378,8 @@ def main():
     parser.add_argument('--validation_interval', default=500, type=int) # 20 1000 500
     parser.add_argument('--num_ckpt_keep', default=5, type=int) # 5
     parser.add_argument('--fine_tuning', default=False, type=bool)
+    parser.add_argument('--use_fgsm', action='store_true')
+    parser.add_argument('--fgsm_eps', type=float, default=0.001)
 
     a = parser.parse_args()
 
