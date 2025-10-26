@@ -380,6 +380,7 @@ def main():
     parser.add_argument('--fine_tuning', default=False, type=bool)
     parser.add_argument('--use_fgsm', action='store_true')
     parser.add_argument('--fgsm_eps', type=float, default=0.001)
+    parser.add_argument('--input_mels_dir', default='', type=str)
 
     a = parser.parse_args()
 
